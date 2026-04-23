@@ -5,7 +5,10 @@ import {asyncWrapper} from "../utils/wrapper.js"
 const router = express.Router();
 
 router.post("/register",asyncWrapper(authController.register))
+router.post("/login",asyncWrapper(authController.login))
 router.get("/get-me",asyncWrapper(authController.getUser))
 router.get("/refresh-token",asyncWrapper(authController.refreshToken))
+router.get("/logout",asyncWrapper(authController.logout))
+router.get("/logout-all",asyncWrapper(authController.logoutAll))
 
 export default router;
