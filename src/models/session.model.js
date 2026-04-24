@@ -1,36 +1,48 @@
 import mongoose from "mongoose";
 
-const sesstionSchema = new mongoose.Schema({
-    userId:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"users",
-        required:[true,"User is required"]
+const sessionSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "users",
+      required: [true, "User is required"],
     },
-    refreshTokenHash:{
-        type:String,
-        required:[true,"Refresh token hash is required"]
+    refreshTokenHash: {
+      type: String,
+      required: [true, "Refresh token hash is required"],
     },
-    ip:{
-        type:String,
-        required:[true,"Ip address is required"]
+    ip: {
+      type: String,
+      required: [true, "Ip address is required"],
     },
-    userAgent:{
-        type:String,
-        required:[true,"User Agent is required"]
+    userAgent: {
+      type: String,
+      required: [true, "User Agent is required"],
     },
-    revoked:{
-        type:Boolean,
-        default:false
+    revoked: {
+      type: Boolean,
+      default: false,
     },
-    revokedAt:{
-        type:Date,
-        default:null,
-        index: { expireAfterSeconds: 30 * 24 * 60 * 60 }
-    }
-},{
-    timestamps:true
-})
+    expiresAt: {
+      type: Date,
+      default: null,
+    },
+    revokedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
 
-const SessionModel = mongoose.model("session",sesstionSchema)
+sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+sessionSchema.index(
+  { revokedAt: 1 },
+  { expireAfterSeconds: 90 * 24 * 60 * 60 },
+);
+
+const SessionModel = mongoose.model("session", sessionSchema);
 
 export default SessionModel;

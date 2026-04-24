@@ -49,6 +49,7 @@ export const register = async (req, res) => {
     refreshTokenHash,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
+    expiresAt: new Date(Date.now() + 7*24*60*60*1000)
   });
 
   const accessToken = jwt.sign(
@@ -90,6 +91,8 @@ export const login = async (req, res) => {
     });
   }
 
+  // incase of email verification
+
   // if(!user.verified){
   //   return res.status(401).json({
   //     message:"Email not verified"
@@ -129,6 +132,7 @@ export const login = async (req, res) => {
     refreshTokenHash,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
+    expiresAt: new Date(Date.now() + 7*24*60*60*1000)
   });
 
   const accessToken = jwt.sign(
@@ -243,6 +247,7 @@ export const refreshToken = async (req, res) => {
     .digest("hex");
 
   session.refreshTokenHash = newRefreshTokenHash;
+  session.expiresAt = new Date(Date.now() + 7*24*60*60*1000);
   await session.save();
 
   res.cookie("refreshToken", newRefreshToken, {
@@ -283,6 +288,7 @@ export const logout = async (req, res) => {
 
   session.revoked = true;
   session.revokedAt = new Date();
+  session.expiresAt = null;
   await session.save();
 
   res.clearCookie("refreshToken");
@@ -316,6 +322,7 @@ export const logoutAll = async (req, res) => {
     },
     {
       revoked: true,
+      expiresAt:null,
       revokedAt: new Date(),
     },
   );
