@@ -2,6 +2,9 @@ import User from "../models/auth.model.js";
 import SessionModel from "../models/session.model.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import {generateOTP,getOtpHtml} from "../utils/generateOtp.js"
+import OtpModel from "../models/otp.model.js"
+import {sendEmail} from "../services/email.js"
 
 export const register = async (req, res) => {
   const { username, email, password } = req.body;
@@ -87,6 +90,12 @@ export const login = async (req, res) => {
     });
   }
 
+  // if(!user.verified){
+  //   return res.status(401).json({
+  //     message:"Email not verified"
+  //   })
+  // }
+
   const hashedPassword = crypto
     .createHash("sha256")
     .update(password)
@@ -125,7 +134,7 @@ export const login = async (req, res) => {
   const accessToken = jwt.sign(
     {
       id: user._id,
-      sessionId:session._id
+      sessionId: session._id,
     },
     process.env.JWT_SECRET,
     {
@@ -133,31 +142,37 @@ export const login = async (req, res) => {
     },
   );
 
-  res.cookie("refreshToken",refreshToken,{
-    httpOnly:true,
-    secure:true,
-    sameSite:"strict",
-    maxAge:7*24*60*60*1000
-  })
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
 
   return res.status(200).json({
-    message:"Logged in successfully",
-    user:{
-      username:user.username,
-      email:user.email,
+    message: "Logged in successfully",
+    user: {
+      username: user.username,
+      email: user.email,
     },
     accessToken,
-  })
+  });
 };
 
 export const getUser = async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 
   if (!token) {
-    return res.status(401).json("token is required!");
+    return res.status(401).json({message:"token is required!"});
   }
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
-  console.log(decoded);
+
+  if (!decoded) {
+    return res.status(401).json({
+      message: "Invalid refresh token!",
+    });
+  }
+
   const user = await User.findById(decoded.id);
 
   return res.status(200).json({
@@ -179,6 +194,12 @@ export const refreshToken = async (req, res) => {
   }
 
   const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+
+  if (!decoded) {
+    return res.status(401).json({
+      message: "Invalid refresh token!",
+    });
+  }
 
   const refreshTokenHash = crypto
     .createHash("sha256")
@@ -212,7 +233,7 @@ export const refreshToken = async (req, res) => {
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: "15m",
+      expiresIn: "7d",
     },
   );
 
@@ -282,6 +303,12 @@ export const logoutAll = async (req, res) => {
 
   const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
 
+  if (!decoded) {
+    return res.status(401).json({
+      message: "Invalid refresh token!",
+    });
+  }
+
   await SessionModel.updateMany(
     {
       userId: decoded.id,
@@ -299,3 +326,83 @@ export const logoutAll = async (req, res) => {
     message: "Logged out from all devices successfullu!",
   });
 };
+
+export const register2 = async (req, res) => {
+  const { username, email, password } = req.body;
+
+  const alreadyExist = await User.findOne({
+    $or: [{ username }, { email }],
+  });
+  if (alreadyExist) {
+    return res
+      .status(409)
+      .json({ message: "username or email already exists!" });
+  }
+
+  const hashedPassword = crypto
+    .createHash("sha256")
+    .update(password)
+    .digest("hex");
+
+  const user = await User.create({
+    username,
+    email,
+    password: hashedPassword,
+  });
+
+  const otp = generateOTP();
+  const html = getOtpHtml(otp)
+
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex")
+
+  await OtpModel.create({
+    email,
+    user:user._id,
+    otpHash
+  })
+
+  await sendEmail(email,"OTP verification",`Your OTP is ${otp}`,html)
+
+  return res.status(201).json({
+    message: "User registered successfully!",
+    user: {
+      username: user.username,
+      email: user.email,
+      verified:user.verified
+    },
+  });
+};
+
+export const verifyEmail = async (req,res) => {
+  const {otp,email} = req.body;
+
+  const otpHash = crypto.createHash("sha256").update(otp).digest("hex")
+
+  const otpDoc = await OtpModel.findOne({
+    email,
+    otpHash
+  })
+
+  if(!otpDoc){
+    return res.status(400).json({
+      message:"Invalid OTP"
+    })
+  }
+
+  const user = await User.findByIdAndUpdate(otpDoc.user,{
+    verified:true
+  })
+
+  await OtpModel.deleteMany({
+    user:otpDoc.user
+  })
+
+  return res.status(200).json({
+    message:"Email verified successfully",
+    user: {
+      username: user.username,
+      email: user.email,
+      verified: user.verified
+    }
+  })
+}
